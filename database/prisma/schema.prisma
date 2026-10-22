@@ -1,0 +1,303 @@
+// ============================================================================
+// LIFELINK: A Tamper-Evident, Concurrency-Safe Blood and Organ Allocation Platform
+// Student Developer: Arsh Vardhan Singh (Reg. No: 24BCE2119)
+// Institutional Context: VIT, School of Computer Science and Engineering
+// Course Context: Database Systems Lab
+// Prisma Schema Definition
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  roleId      String   @id @map("role_id") @db.VarChar(32)
+  roleName    String   @unique @map("role_name") @db.VarChar(64)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  users       User[]
+
+  @@map("roles")
+}
+
+model Hospital {
+  hospitalId     String           @id @default(uuid()) @map("hospital_id") @db.VarChar(36)
+  name           String           @db.VarChar(128)
+  code           String           @unique @db.VarChar(16)
+  latitude       Float            @db.DoublePrecision
+  longitude      Float            @db.DoublePrecision
+  address        String           @db.Text
+  phone          String           @db.VarChar(32)
+  isActive       Boolean          @default(true) @map("is_active")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  users          User[]
+  patients       Patient[]
+  donors         Donor[]
+  inventoryUnits InventoryUnit[]
+  requests       Request[]
+  transfersFrom  InventoryTransfer[] @relation("OriginHospital")
+  transfersTo    InventoryTransfer[] @relation("DestinationHospital")
+
+  @@map("hospitals")
+}
+
+model User {
+  userId               String             @id @default(uuid()) @map("user_id") @db.VarChar(36)
+  email                String             @unique @db.VarChar(128)
+  passwordHash         String             @map("password_hash") @db.VarChar(255)
+  fullName             String             @map("full_name") @db.VarChar(128)
+  roleId               String             @map("role_id") @db.VarChar(32)
+  hospitalId           String?            @map("hospital_id") @db.VarChar(36)
+  isActive             Boolean            @default(true) @map("is_active")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  role                 Role               @relation(fields: [roleId], references: [roleId], onDelete: Restrict)
+  hospital             Hospital?          @relation(fields: [hospitalId], references: [hospitalId], onDelete: SetNull)
+  allocations          Allocation[]
+  requests             Request[]
+  initiatedTransfers   InventoryTransfer[]
+  emergencyGrants      EmergencyGrant[]   @relation("UserEmergencyGrants")
+  revokedEmergencyGrants EmergencyGrant[] @relation("RevokedByUser")
+
+  @@map("users")
+}
+
+model BloodType {
+  bloodType    String          @id @map("blood_type") @db.VarChar(8)
+  description  String          @db.VarChar(64)
+  isRhPositive Boolean         @map("is_rh_positive")
+  patients     Patient[]
+  donors       Donor[]
+  inventoryUnits InventoryUnit[]
+  requests     Request[]
+
+  @@map("blood_types")
+}
+
+model Patient {
+  patientId      String    @id @default(uuid()) @map("patient_id") @db.VarChar(36)
+  fullName       String    @map("full_name") @db.VarChar(128)
+  dateOfBirth    DateTime  @map("date_of_birth") @db.Date
+  bloodType      String    @map("blood_type") @db.VarChar(8)
+  hospitalId     String    @map("hospital_id") @db.VarChar(36)
+  urgencyLevel   String    @map("urgency_level") @db.VarChar(16)
+  conditionNotes String?   @map("condition_notes") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  bloodTypeRel   BloodType @relation(fields: [bloodType], references: [bloodType], onDelete: Restrict)
+  hospital       Hospital  @relation(fields: [hospitalId], references: [hospitalId], onDelete: Restrict)
+  requests       Request[]
+
+  @@map("patients")
+}
+
+model Donor {
+  donorId             String          @id @default(uuid()) @map("donor_id") @db.VarChar(36)
+  fullName            String          @map("full_name") @db.VarChar(128)
+  bloodType           String          @map("blood_type") @db.VarChar(8)
+  dateOfBirth         DateTime        @map("date_of_birth") @db.Date
+  consentVerified     Boolean         @default(false) @map("consent_verified")
+  consentDocumentRef  String?         @map("consent_document_ref") @db.VarChar(128)
+  hospitalId          String          @map("hospital_id") @db.VarChar(36)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+
+  bloodTypeRel        BloodType       @relation(fields: [bloodType], references: [bloodType], onDelete: Restrict)
+  hospital            Hospital        @relation(fields: [hospitalId], references: [hospitalId], onDelete: Restrict)
+  inventoryUnits      InventoryUnit[]
+
+  @@map("donors")
+}
+
+model InventoryUnit {
+  unitId           String              @id @default(uuid()) @map("unit_id") @db.VarChar(36)
+  resourceType     String              @map("resource_type") @db.VarChar(16)
+  bloodType        String              @map("blood_type") @db.VarChar(8)
+  componentType    String              @map("component_type") @db.VarChar(32)
+  donorId          String?             @map("donor_id") @db.VarChar(36)
+  hospitalId       String              @map("hospital_id") @db.VarChar(36)
+  collectionTime   DateTime            @map("collection_time") @db.Timestamptz()
+  expiryTime       DateTime            @map("expiry_time") @db.Timestamptz()
+  status           String              @map("status") @db.VarChar(20)
+  storageLocation  String              @map("storage_location") @db.VarChar(64)
+  quarantineReason String?             @map("quarantine_reason") @db.Text
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  bloodTypeRel     BloodType           @relation(fields: [bloodType], references: [bloodType], onDelete: Restrict)
+  donor            Donor?              @relation(fields: [donorId], references: [donorId], onDelete: SetNull)
+  hospital         Hospital            @relation(fields: [hospitalId], references: [hospitalId], onDelete: Restrict)
+  allocations      Allocation[]
+  transfers        InventoryTransfer[]
+
+  @@index([status, bloodType, expiryTime], name: "idx_inventory_status_blood")
+  @@index([hospitalId, status], name: "idx_inventory_hospital")
+  @@map("inventory_units")
+}
+
+model Request {
+  requestId          String       @id @default(uuid()) @map("request_id") @db.VarChar(36)
+  patientId          String       @map("patient_id") @db.VarChar(36)
+  hospitalId         String       @map("hospital_id") @db.VarChar(36)
+  resourceType       String       @map("resource_type") @db.VarChar(16)
+  requiredBloodType  String       @map("required_blood_type") @db.VarChar(8)
+  requiredComponent  String       @map("required_component") @db.VarChar(32)
+  urgencyLevel       String       @map("urgency_level") @db.VarChar(16)
+  status             String       @map("status") @db.VarChar(20)
+  justification      String       @db.Text
+  requestedByUserId  String?      @map("requested_by_user_id") @db.VarChar(36)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  patient            Patient      @relation(fields: [patientId], references: [patientId], onDelete: Restrict)
+  hospital           Hospital     @relation(fields: [hospitalId], references: [hospitalId], onDelete: Restrict)
+  bloodTypeRel       BloodType    @relation(fields: [requiredBloodType], references: [bloodType], onDelete: Restrict)
+  requestedByUser    User?        @relation(fields: [requestedByUserId], references: [userId], onDelete: SetNull)
+  allocations        Allocation[]
+
+  @@index([status, urgencyLevel], name: "idx_requests_status_urgency")
+  @@map("requests")
+}
+
+model Allocation {
+  allocationId        String              @id @default(uuid()) @map("allocation_id") @db.VarChar(36)
+  requestId           String              @map("request_id") @db.VarChar(36)
+  unitId              String              @map("unit_id") @db.VarChar(36)
+  allocatedByUserId   String              @map("allocated_by_user_id") @db.VarChar(36)
+  urgencyScore        Float               @map("urgency_score") @db.DoublePrecision
+  compatibilityScore  Float               @map("compatibility_score") @db.DoublePrecision
+  shelfLifeScore      Float               @map("shelf_life_score") @db.DoublePrecision
+  distanceScore       Float               @map("distance_score") @db.DoublePrecision
+  totalPriorityScore  Float               @map("total_priority_score") @db.DoublePrecision
+  status              String              @map("status") @db.VarChar(20)
+  allocationNotes     String?             @map("allocation_notes") @db.Text
+  allocatedAt         DateTime            @default(now()) @map("allocated_at") @db.Timestamptz()
+  completedAt         DateTime?           @map("completed_at") @db.Timestamptz()
+
+  request             Request             @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  unit                InventoryUnit       @relation(fields: [unitId], references: [unitId], onDelete: Restrict)
+  allocatedByUser     User                @relation(fields: [allocatedByUserId], references: [userId], onDelete: Restrict)
+  transfers           InventoryTransfer[]
+
+  @@index([requestId], name: "idx_allocations_request")
+  @@map("allocations")
+}
+
+model InventoryTransfer {
+  transferId         String        @id @default(uuid()) @map("transfer_id") @db.VarChar(36)
+  unitId             String        @map("unit_id") @db.VarChar(36)
+  allocationId       String        @map("allocation_id") @db.VarChar(36)
+  fromHospitalId     String        @map("from_hospital_id") @db.VarChar(36)
+  toHospitalId       String        @map("to_hospital_id") @db.VarChar(36)
+  initiatedByUserId  String        @map("initiated_by_user_id") @db.VarChar(36)
+  status             String        @map("status") @db.VarChar(20)
+  trackingNotes      String?       @map("tracking_notes") @db.Text
+  dispatchedAt       DateTime      @default(now()) @map("dispatched_at") @db.Timestamptz()
+  receivedAt         DateTime?     @map("received_at") @db.Timestamptz()
+
+  unit               InventoryUnit @relation(fields: [unitId], references: [unitId], onDelete: Restrict)
+  allocation         Allocation    @relation(fields: [allocationId], references: [allocationId], onDelete: Restrict)
+  fromHospital       Hospital      @relation("OriginHospital", fields: [fromHospitalId], references: [hospitalId], onDelete: Restrict)
+  toHospital         Hospital      @relation("DestinationHospital", fields: [toHospitalId], references: [hospitalId], onDelete: Restrict)
+  initiatedByUser    User          @relation(fields: [initiatedByUserId], references: [userId], onDelete: Restrict)
+
+  @@map("inventory_transfers")
+}
+
+model TransactionLog {
+  txId           String   @id @default(uuid()) @map("tx_id") @db.VarChar(36)
+  txType         String   @map("tx_type") @db.VarChar(32)
+  isolationLevel String   @map("isolation_level") @db.VarChar(32)
+  status         String   @db.VarChar(16)
+  startedAt      DateTime @map("started_at") @db.Timestamptz()
+  completedAt    DateTime @map("completed_at") @db.Timestamptz()
+  durationMs     Float    @map("duration_ms") @db.DoublePrecision
+  details        String?  @db.Text
+
+  @@map("transactions_log")
+}
+
+model AuditLedger {
+  auditId           String           @id @default(uuid()) @map("audit_id") @db.VarChar(36)
+  sequenceNumber    BigInt           @unique @default(autoincrement()) @map("sequence_number")
+  entityType        String           @map("entity_type") @db.VarChar(64)
+  entityId          String           @map("entity_id") @db.VarChar(64)
+  operationType     String           @map("operation_type") @db.VarChar(32)
+  actorId           String           @map("actor_id") @db.VarChar(64)
+  actorRole         String           @map("actor_role") @db.VarChar(32)
+  eventTimestamp    DateTime         @default(now()) @map("event_timestamp") @db.Timestamptz()
+  changeMetadata    Json             @map("change_metadata")
+  previousEventHash String           @map("previous_event_hash") @db.VarChar(64)
+  currentEventHash  String           @map("current_event_hash") @db.VarChar(64)
+  emergencyGrants   EmergencyGrant[]
+
+  @@index([sequenceNumber], name: "idx_audit_sequence")
+  @@index([entityType, entityId], name: "idx_audit_entity")
+  @@map("audit_ledger")
+}
+
+model LedgerCheckpoint {
+  checkpointId     String   @id @default(uuid()) @map("checkpoint_id") @db.VarChar(36)
+  fromSequence     BigInt   @map("from_sequence")
+  toSequence       BigInt   @map("to_sequence")
+  eventCount       Int      @map("event_count")
+  merkleRootHash   String   @map("merkle_root_hash") @db.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  status           String   @db.VarChar(16)
+  externalAnchorRef String? @map("external_anchor_ref") @db.VarChar(128)
+
+  @@map("ledger_checkpoints")
+}
+
+model QueryTelemetry {
+  telemetryId          String   @id @default(uuid()) @map("telemetry_id") @db.VarChar(36)
+  queryFingerprint     String   @map("query_fingerprint") @db.VarChar(255)
+  queryCategory        String   @map("query_category") @db.VarChar(32)
+  durationMs           Float    @map("duration_ms") @db.DoublePrecision
+  executionTimestamp   DateTime @default(now()) @map("execution_timestamp") @db.Timestamptz()
+  executionStatus      String   @map("execution_status") @db.VarChar(16)
+  applicationOperation String   @map("application_operation") @db.VarChar(64)
+  resultCount          Int?     @map("result_count")
+
+  @@index([queryFingerprint, durationMs], name: "idx_telemetry_fingerprint")
+  @@map("query_telemetry")
+}
+
+model IndexRecommendation {
+  recommendationId         String    @id @default(uuid()) @map("recommendation_id") @db.VarChar(36)
+  tableName                String    @map("table_name") @db.VarChar(64)
+  columnNames              String    @map("column_names") @db.VarChar(128)
+  indexType                String    @map("index_type") @db.VarChar(16)
+  reason                   String    @db.Text
+  estimatedImprovementPct  Float     @map("estimated_improvement_pct") @db.DoublePrecision
+  measuredImprovementPct   Float?    @map("measured_improvement_pct") @db.DoublePrecision
+  status                   String    @db.VarChar(20)
+  appliedAt                DateTime? @map("applied_at") @db.Timestamptz()
+
+  @@map("index_recommendations")
+}
+
+model EmergencyGrant {
+  grantId              String       @id @default(uuid()) @map("grant_id") @db.VarChar(36)
+  userId               String       @map("user_id") @db.VarChar(36)
+  reason               String       @db.Text
+  requestedPermissions String       @map("requested_permissions") @db.VarChar(128)
+  grantedAt            DateTime     @default(now()) @map("granted_at") @db.Timestamptz()
+  expiresAt            DateTime     @map("expires_at") @db.Timestamptz()
+  status               String       @db.VarChar(16)
+  revokedAt            DateTime?    @map("revoked_at") @db.Timestamptz()
+  revokedBy            String?      @map("revoked_by") @db.VarChar(36)
+  auditEventId         String?      @map("audit_event_id") @db.VarChar(36)
+
+  user                 User         @relation("UserEmergencyGrants", fields: [userId], references: [userId], onDelete: Restrict)
+  revokedByUser        User?        @relation("RevokedByUser", fields: [revokedBy], references: [userId], onDelete: SetNull)
+  auditEvent           AuditLedger? @relation(fields: [auditEventId], references: [auditId], onDelete: SetNull)
+
+  @@index([userId, status, expiresAt], name: "idx_emergency_user_status")
+  @@map("emergency_grants")
+}
