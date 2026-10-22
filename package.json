@@ -12,7 +12,7 @@
     "test:build": "esbuild backend/src/tests/suite.test.ts --bundle --platform=node --format=esm --target=node22 --outfile=backend/dist/suite.test.js && node backend/dist/suite.test.js",
     "build:backend": "esbuild backend/src/server.ts --bundle --platform=node --format=esm --target=node22 --outfile=backend/dist/server.js",
     "build:frontend": "cd frontend && npm run build",
-    "build": "npm run build:backend && npm run build:frontend",
+    "build": "npm run build:backend && npm run build:frontend && cp -rf frontend/dist ./dist",
     "start": "node backend/dist/server.js",
     "dev:backend": "node --watch backend/dist/server.js",
     "dev:frontend": "cd frontend && npm run dev"
